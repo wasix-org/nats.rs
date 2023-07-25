@@ -13,11 +13,11 @@
 
 use crate::connector::ConnectorOptions;
 use crate::tls;
-use std::fs::File;
+// use std::fs::File;
 use std::io::{self, BufReader, ErrorKind};
 use std::path::PathBuf;
 use tokio_rustls::rustls::{self, Certificate, OwnedTrustAnchor, PrivateKey};
-use webpki::TrustAnchor;
+// use webpki::TrustAnchor;
 
 /// Loads client certificates from a `.pem` file.
 /// If the pem file is found, but does not contain any certificates, it will return
@@ -66,19 +66,26 @@ pub(crate) async fn config_tls(options: &ConnectorOptions) -> io::Result<rustls:
     let mut root_store = tokio_rustls::rustls::RootCertStore::empty();
     // load native system certs only if user did not specify them.
     if options.tls_client_config.is_some() || options.certificates.is_empty() {
-        root_store.add_parsable_certificates(
-            rustls_native_certs::load_native_certs()
-                .map_err(|err| {
-                    io::Error::new(
-                        ErrorKind::Other,
-                        format!("could not load platform certs: {err}"),
-                    )
-                })?
-                .into_iter()
-                .map(|cert| cert.0)
-                .collect::<Vec<Vec<u8>>>()
-                .as_ref(),
-        );
+        // root_store.add_parsable_certificates(
+        //     rustls_native_certs::load_native_certs()
+        //         .map_err(|err| {
+        //             io::Error::new(
+        //                 ErrorKind::Other,
+        //                 format!("could not load platform certs: {err}"),
+        //             )
+        //         })?
+        //         .into_iter()
+        //         .map(|cert| cert.0)
+        //         .collect::<Vec<Vec<u8>>>()
+        //         .as_ref(),
+        // );
+        root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+            OwnedTrustAnchor::from_subject_spki_name_constraints(
+                ta.subject,
+                ta.spki,
+                ta.name_constraints,
+            )
+        }));
     }
 
     // use provided ClientConfig or built it from options.
@@ -87,26 +94,35 @@ pub(crate) async fn config_tls(options: &ConnectorOptions) -> io::Result<rustls:
             Ok(config.to_owned())
         } else {
             // Include user-provided certificates.
-            for cafile in &options.certificates {
-                let mut pem = BufReader::new(File::open(cafile)?);
-                let certs = rustls_pemfile::certs(&mut pem)?;
-                let trust_anchors = certs.iter().map(|cert| {
-                    let ta = TrustAnchor::try_from_cert_der(&cert[..])
-                        .map_err(|err| {
-                            io::Error::new(
-                                ErrorKind::InvalidInput,
-                                format!("could not load certs: {err}"),
-                            )
-                        })
-                        .unwrap();
+            // for cafile in &options.certificates {
+            // let mut pem = BufReader::new(File::open(cafile)?);
+            // let certs = rustls_pemfile::certs(&mut pem)?;
+            // let trust_anchors = certs.iter().map(|cert| {
+            //     let ta = TrustAnchor::try_from_cert_der(&cert[..])
+            //         .map_err(|err| {
+            //             io::Error::new(
+            //                 ErrorKind::InvalidInput,
+            //                 format!("could not load certs: {err}"),
+            //             )
+            //         })
+            //         .unwrap();
+            //     OwnedTrustAnchor::from_subject_spki_name_constraints(
+            //         ta.subject,
+            //         ta.spki,
+            //         ta.name_constraints,
+            //     )
+            // });
+            // root_store.add_server_trust_anchors(trust_anchors);
+            // }
+            root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(
+                |ta| {
                     OwnedTrustAnchor::from_subject_spki_name_constraints(
                         ta.subject,
                         ta.spki,
                         ta.name_constraints,
                     )
-                });
-                root_store.add_server_trust_anchors(trust_anchors);
-            }
+                },
+            ));
             let builder = rustls::ClientConfig::builder()
                 .with_safe_defaults()
                 .with_root_certificates(root_store);
