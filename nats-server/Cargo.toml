@@ -8,7 +8,10 @@ license = "Apache-2.0"
 
 [dependencies]
 lazy_static = "1.4.0"
-regex = { version = "1.7.1", default-features = false, features = ["std", "unicode-perl"] }
+regex = { version = "1.7.1", default-features = false, features = [
+    "std",
+    "unicode-perl",
+] }
 url = "2"
 json = "0.12"
 nuid = "0.5"
@@ -17,5 +20,7 @@ tokio-retry = "0.3.0"
 
 [dev-dependencies]
 async-nats = "0.31"
-tokio = { version = "1", features = ["full"]  }
+tokio = { version = "=1.24.2", features = [
+    "full",
+], git = "https://github.com/wasix-org/tokio.git", branch = "epoll" }
 futures = "0.3"

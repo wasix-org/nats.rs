@@ -17,6 +17,7 @@ use std::fs::File;
 use std::io::{self, BufReader, ErrorKind};
 use std::path::PathBuf;
 use tokio_rustls::rustls::{self, Certificate, OwnedTrustAnchor, PrivateKey};
+// use tokio_rustls::webpki::TrustAnchor;
 use webpki::TrustAnchor;
 
 /// Loads client certificates from a `.pem` file.
@@ -66,19 +67,13 @@ pub(crate) async fn config_tls(options: &ConnectorOptions) -> io::Result<rustls:
     let mut root_store = tokio_rustls::rustls::RootCertStore::empty();
     // load native system certs only if user did not specify them.
     if options.tls_client_config.is_some() || options.certificates.is_empty() {
-        root_store.add_parsable_certificates(
-            rustls_native_certs::load_native_certs()
-                .map_err(|err| {
-                    io::Error::new(
-                        ErrorKind::Other,
-                        format!("could not load platform certs: {err}"),
-                    )
-                })?
-                .into_iter()
-                .map(|cert| cert.0)
-                .collect::<Vec<Vec<u8>>>()
-                .as_slice(),
-        );
+        root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+            OwnedTrustAnchor::from_subject_spki_name_constraints(
+                ta.subject,
+                ta.spki,
+                ta.name_constraints,
+            )
+        }));
     }
 
     // use provided ClientConfig or built it from options.
@@ -105,7 +100,7 @@ pub(crate) async fn config_tls(options: &ConnectorOptions) -> io::Result<rustls:
                         ta.name_constraints,
                     )
                 });
-                root_store.add_trust_anchors(trust_anchors);
+                root_store.add_server_trust_anchors(trust_anchors)
             }
             let builder = rustls::ClientConfig::builder()
                 .with_safe_defaults()
